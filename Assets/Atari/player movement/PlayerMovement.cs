@@ -195,7 +195,7 @@ public class PlayerMovement : MonoBehaviour
                 Debug.Log("coyote time remaining: " + wallCoyoteTime.Remaining() + " | " + "on the ground: " + isGrounded + " | " + "buffer remaining: " + bufferTime.Remaining());
 
                 // boost off wall
-                if (!wallCoyoteTime.IsReady() && !isGrounded)
+                if (!wallCoyoteTime.IsReady() && !isGrounded && canWallJump)
                 {
                     Debug.Log("boost");
 
@@ -265,6 +265,9 @@ public class PlayerMovement : MonoBehaviour
 
     private bool WallCheck()
     {
+        // always return false if unable to wall jump
+        if (!canWallJump) return false;
+
         // cast box slightly from player's feet
         Vector2 origin = (Vector2)transform.position + playerCollider.offset + playerCollider.bounds.size.x / 2f * Vector2.left;
         Vector2 boxSize = new(0.05f, 0.95f * playerCollider.bounds.size.y);
