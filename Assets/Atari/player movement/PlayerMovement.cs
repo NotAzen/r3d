@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -41,6 +43,12 @@ public class Cooldown
 [RequireComponent(typeof(Animator))]
 public class PlayerMovement : MonoBehaviour
 {
+    [Header("Ability Unlocks")]
+    [HideInInspector] public bool canDoubleJump = false;
+    [HideInInspector] public bool canWallJump = false;
+    [HideInInspector] public bool canSlide = false;
+    [HideInInspector] public bool canDash = false;
+
     [Header("Base Stats")]
     [SerializeField] private float maxSpeed = 5f;
     [SerializeField] private float acceleration = 10f;
@@ -60,6 +68,8 @@ public class PlayerMovement : MonoBehaviour
     private bool isOnWall = false;
     private bool isResisting = false;
     private bool isCrouching = false;
+    private bool isSliding = false;
+    private bool hasSecondJump = false;
     private Vector2 xForce;
     private float storedVelocity;
 
@@ -76,6 +86,8 @@ public class PlayerMovement : MonoBehaviour
     private static readonly int jumpHash = Animator.StringToHash("jump");
     private static readonly int yVelHash = Animator.StringToHash("yVel");
     private static readonly int isCrouchingHash = Animator.StringToHash("isCrouching");
+
+    // -------------------------------------------------------------------------------------- //
 
     // after everything is done loading
     void Awake()
@@ -187,7 +199,14 @@ public class PlayerMovement : MonoBehaviour
                 jumpCoyoteTime.Drain();
                 bufferTime.Drain();
 
+                // trigger animator
                 animator.SetTrigger(jumpHash);
+            }
+
+            // in air basically
+            if (canDoubleJump)
+            {
+
             }
         }
     }
@@ -196,7 +215,7 @@ public class PlayerMovement : MonoBehaviour
     {
         // cast thin box at the player's feet and verify the hit normal points upwards
         Vector2 origin = (Vector2)transform.position + playerCollider.offset + playerCollider.bounds.size.y / 2f * Vector2.down;
-        Vector2 boxSize = new(playerCollider.bounds.size.x * 0.9f, 0.05f);
+        Vector2 boxSize = new(playerCollider.bounds.size.x * 0.95f, 0.05f);
 
         RaycastHit2D hit = Physics2D.BoxCast(origin, boxSize, 0, Vector2.down, 0, LayerMask.GetMask("Ground"));
         return hit.collider != null && hit.normal.y > 0.65f;
@@ -206,7 +225,7 @@ public class PlayerMovement : MonoBehaviour
     {
         // cast box slightly from player's feet
         Vector2 origin = (Vector2)transform.position + playerCollider.offset + playerCollider.bounds.size.x / 2f * Vector2.left;
-        Vector2 boxSize = new(0.05f, 0.9f * playerCollider.bounds.size.y);
+        Vector2 boxSize = new(0.05f, 0.95f * playerCollider.bounds.size.y);
 
         RaycastHit2D hit = Physics2D.BoxCast(origin, boxSize, 0, Vector2.right, playerCollider.bounds.size.x, LayerMask.GetMask("Ground"));
         return hit.collider != null && Mathf.Abs(hit.normal.x) > 0.65f;
@@ -224,11 +243,20 @@ public class PlayerMovement : MonoBehaviour
         // crouching (below a certain threshold so controllers crouch on slight imperfections)
         if (Vector2.Dot(Vector2.up, ctx.ReadValue<Vector2>().normalized) < -0.5f)
         {
-            isCrouching = true;
+            // trigger sliding if the player is going fast enough
+            if (rb.linearVelocityX > maxSpeed * 0.7f)
+            {
+                isSliding = true;
+            }
+            else
+            {
+                isCrouching = true;
+            }
         }
         else
         {
             isCrouching = false;
+            isSliding = false;
         }
     }
 

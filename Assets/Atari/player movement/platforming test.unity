@@ -3292,33 +3292,9 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 88524776396352302, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
-      propertyPath: acceleration
-      value: 8
-      objectReference: {fileID: 0}
-    - target: {fileID: 2639438713440970672, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
-      propertyPath: m_Size.x
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2639438713440970672, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
-      propertyPath: m_SpriteTilingProperty.pivot.x
-      value: 0.67
-      objectReference: {fileID: 0}
-    - target: {fileID: 2639438713440970672, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
-      propertyPath: m_SpriteTilingProperty.pivot.y
-      value: 0.25
-      objectReference: {fileID: 0}
-    - target: {fileID: 2639438713440970672, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
-      propertyPath: m_SpriteTilingProperty.oldSize.x
-      value: 2
-      objectReference: {fileID: 0}
     - target: {fileID: 5217795178710153610, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
       propertyPath: m_Name
       value: player
-      objectReference: {fileID: 0}
-    - target: {fileID: 5217795178710153610, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
-      propertyPath: m_TagString
-      value: Player
       objectReference: {fileID: 0}
     - target: {fileID: 6340534480965434975, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
       propertyPath: m_LocalPosition.x
