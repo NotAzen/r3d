@@ -148,6 +148,7 @@ public class PlayerMovement : MonoBehaviour
         // give player coyote time for jumping
         if (isGrounded)
         {
+            canDoubleJump = true;
             jumpCoyoteTime.Trigger();
         }
         if (isOnWall)
@@ -206,8 +207,40 @@ public class PlayerMovement : MonoBehaviour
             // in air basically
             if (canDoubleJump)
             {
+                rb.linearVelocityY = jumpForce;
 
+                canDoubleJump = false;
+
+                // trigger animator
+                animator.SetTrigger(jumpHash);
             }
+        }
+    }
+
+    // -------------------------------------------------------------------------------------- //
+
+    // ability unlock function
+    public void UnlockAbility(string name)
+    {
+        switch (name)
+        {
+            // not evil cases
+            case "doublejump":
+                canDoubleJump = true;
+                return;
+            case "walljump":
+                canWallJump = true;
+                return;
+            case "slide":
+                canSlide = true;
+                return;
+            case "dash":
+                canDash = true;
+                return;
+
+            // evil case
+            default:
+                return;
         }
     }
 
@@ -270,6 +303,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (playerCollider == null) return;
+
         // cast thin box at the player's feet and verify the hit normal points upwards
         Vector2 origin = (Vector2)transform.position + playerCollider.offset + playerCollider.bounds.size.y / 2f * Vector2.down;
         Vector2 boxSize = new(playerCollider.bounds.size.x * 0.9f, 0.02f);
