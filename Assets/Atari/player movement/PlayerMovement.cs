@@ -44,10 +44,14 @@ public class Cooldown
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Ability Unlocks")]
-    [HideInInspector] public bool canDoubleJump = false;
-    [HideInInspector] public bool canWallJump = false;
-    [HideInInspector] public bool canSlide = false;
-    [HideInInspector] public bool canDash = false;
+    [HideInInspector]
+    public bool canDoubleJump = true;
+    [HideInInspector]
+    public bool canWallJump = false;
+    [HideInInspector]
+    public bool canSlide = false;
+    [HideInInspector]
+    public bool canDash = false;
 
     [Header("Base Stats")]
     [SerializeField] private float maxSpeed = 5f;
@@ -80,12 +84,14 @@ public class PlayerMovement : MonoBehaviour
     private Animator animator;
 
     [Header("Animator Hashing")]
-    private static readonly int IsGroundedHash = Animator.StringToHash("isGrounded");
     private static readonly int xSpeedHash = Animator.StringToHash("xSpeed");
-    private static readonly int xResistingHash = Animator.StringToHash("xResisting");
-    private static readonly int jumpHash = Animator.StringToHash("jump");
     private static readonly int yVelHash = Animator.StringToHash("yVel");
+    private static readonly int jumpHash = Animator.StringToHash("jump");
+    private static readonly int xResistingHash = Animator.StringToHash("xResisting");
+    private static readonly int IsGroundedHash = Animator.StringToHash("isGrounded");
     private static readonly int isCrouchingHash = Animator.StringToHash("isCrouching");
+    private static readonly int isOnWallHash = Animator.StringToHash("isOnWall");
+    private static readonly int isSlidingHash = Animator.StringToHash("isSliding");
 
     // -------------------------------------------------------------------------------------- //
 
@@ -132,11 +138,14 @@ public class PlayerMovement : MonoBehaviour
             }
         }
 
-        animator.SetBool(IsGroundedHash, isGrounded);
+        // animator stuff
         animator.SetFloat(xSpeedHash, Mathf.Abs(rb.linearVelocityX));
-        animator.SetBool(xResistingHash, isResisting);
         animator.SetFloat(yVelHash, rb.linearVelocityY);
+        animator.SetBool(xResistingHash, isResisting);
+        animator.SetBool(IsGroundedHash, isGrounded);
         animator.SetBool(isCrouchingHash, isCrouching);
+        animator.SetBool(isOnWallHash, isOnWall);
+        animator.SetBool(isSlidingHash, isSliding);
     }
 
     private void FixedUpdate()
@@ -148,7 +157,7 @@ public class PlayerMovement : MonoBehaviour
         // give player coyote time for jumping
         if (isGrounded)
         {
-            canDoubleJump = true;
+            hasSecondJump = true;
             jumpCoyoteTime.Trigger();
         }
         if (isOnWall)
@@ -204,12 +213,12 @@ public class PlayerMovement : MonoBehaviour
                 animator.SetTrigger(jumpHash);
             }
 
-            // in air basically
-            if (canDoubleJump)
+            // in air basically (unlocks under double jump lock)
+            else if (hasSecondJump && canDoubleJump)
             {
                 rb.linearVelocityY = jumpForce;
 
-                canDoubleJump = false;
+                hasSecondJump = false;
 
                 // trigger animator
                 animator.SetTrigger(jumpHash);
