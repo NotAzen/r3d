@@ -3,7 +3,7 @@ using UnityEngine;
 public class collectables : MonoBehaviour
 {
     public PlayerMovement PM;
-    public string Objname;
+    public Locks Objname;
 
     public void OnTriggerEnter2D(UnityEngine.Collider2D collision)
     {
