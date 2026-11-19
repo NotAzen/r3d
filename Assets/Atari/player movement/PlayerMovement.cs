@@ -303,6 +303,9 @@ public class PlayerMovement : MonoBehaviour
             {
                 isCrouching = true;
             }
+
+            // state debugging
+            Debug.Log("slide: " + isSliding + " | " + "crouch: " + isCrouching);
         }
         else
         {
