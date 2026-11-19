@@ -1,8 +1,14 @@
 using System;
-using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
+
+public enum Locks
+{
+    DoubleJump,
+    WallJump,
+    Slide,
+    Dash
+}
 
 [Serializable]
 public class Cooldown
@@ -229,22 +235,21 @@ public class PlayerMovement : MonoBehaviour
     // -------------------------------------------------------------------------------------- //
 
     // ability unlock function
-    public void UnlockAbility(string name)
+    public void UnlockAbility(Locks name)
     {
         switch (name)
         {
             // not evil cases
-            case "doublejump":
+            case Locks.DoubleJump:
                 canDoubleJump = true;
-               Debug.Log("jump active");
                 return;
-            case "walljump":
+            case Locks.WallJump:
                 canWallJump = true;
                 return;
-            case "slide":
+            case Locks.Slide:
                 canSlide = true;
                 return;
-            case "dash":
+            case Locks.Dash:
                 canDash = true;
                 return;
 
