@@ -236,6 +236,7 @@ public class PlayerMovement : MonoBehaviour
             // not evil cases
             case "doublejump":
                 canDoubleJump = true;
+               Debug.Log("jump active");
                 return;
             case "walljump":
                 canWallJump = true;
