@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -11,15 +12,29 @@ public enum Locks
 }
 
 [Serializable]
-public class Cooldown
+public struct BoxColliderSizes
+{
+    [SerializeField] private Vector2 offset;
+    [SerializeField] private Vector2 size;
+
+    public void ChangeCollider(BoxCollider2D coll)
+    {
+        coll.offset = offset;
+        coll.size = size;
+    }
+}
+
+[Serializable]
+public struct Cooldown
 {
     [SerializeField] private float cooldown;
     private float lastTriggerTime;
 
     // public constructor
-    public Cooldown()
+    public Cooldown(float cooldown)
     {
-        lastTriggerTime = -100f;
+        this.cooldown = cooldown;
+        lastTriggerTime = -cooldown;
     }
 
     public void Trigger()
@@ -59,6 +74,10 @@ public class PlayerMovement : MonoBehaviour
     [HideInInspector]
     private bool canDash = false;
 
+    [Header("Collider Changes")]
+    [SerializeField] private BoxColliderSizes normalColl;
+    [SerializeField] private BoxColliderSizes slideColl;
+
     [Header("Base Stats")]
     [SerializeField] private float maxSpeed = 5f;
     [SerializeField] private float acceleration = 10f;
@@ -88,7 +107,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("Components")]
     private SpriteRenderer sr;
     private Rigidbody2D rb;
-    private Collider2D playerCollider;
+    private BoxCollider2D playerCollider;
     private Animator animator;
 
     [Header("Animator Hashing")]
@@ -115,9 +134,20 @@ public class PlayerMovement : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        // flip sprite
         if (rb.linearVelocityX != 0)
         {
             sr.flipX = rb.linearVelocityX < 0;
+        }
+
+        // collider changes
+        if (isSliding)
+        {
+            slideColl.ChangeCollider(playerCollider);
+        }
+        else
+        {
+            normalColl.ChangeCollider(playerCollider);
         }
     }
 
@@ -136,10 +166,11 @@ public class PlayerMovement : MonoBehaviour
             isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX) && Mathf.Abs(rb.linearVelocityX) > acceleration;
 
             // friction
-            if (xForce.x == 0)
+            if (xForce.x == 0 && isGrounded) // isgrounded test ??
             {
                 rb.linearDamping = 2;
 
+                // less friction while sliding
                 if (isSliding)
                 {
                     rb.linearDamping = 1;
