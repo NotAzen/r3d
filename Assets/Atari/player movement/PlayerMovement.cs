@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -11,15 +12,29 @@ public enum Locks
 }
 
 [Serializable]
-public class Cooldown
+public struct BoxColliderSizes
+{
+    [SerializeField] private Vector2 offset;
+    [SerializeField] private Vector2 size;
+
+    public void ChangeCollider(BoxCollider2D coll)
+    {
+        coll.offset = offset;
+        coll.size = size;
+    }
+}
+
+[Serializable]
+public struct Cooldown
 {
     [SerializeField] private float cooldown;
     private float lastTriggerTime;
 
     // public constructor
-    public Cooldown()
+    public Cooldown(float cooldown)
     {
-        lastTriggerTime = -100f;
+        this.cooldown = cooldown;
+        lastTriggerTime = -cooldown;
     }
 
     public void Trigger()
@@ -51,13 +66,17 @@ public class PlayerMovement : MonoBehaviour
 {
     [Header("Ability Unlocks")]
     [HideInInspector]
-    public bool canDoubleJump = true;
+    private bool canDoubleJump = false;
     [HideInInspector]
-    public bool canWallJump = false;
+    private bool canWallJump = false;
     [HideInInspector]
-    public bool canSlide = false;
+    private bool canSlide = false;
     [HideInInspector]
-    public bool canDash = false;
+    private bool canDash = false;
+
+    [Header("Collider Changes")]
+    [SerializeField] private BoxColliderSizes normalColl;
+    [SerializeField] private BoxColliderSizes slideColl;
 
     [Header("Base Stats")]
     [SerializeField] private float maxSpeed = 5f;
@@ -74,6 +93,8 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float speedMultiplier = 1f;
 
     [Header("other stats idk")]
+    [HideInInspector]
+    private bool canMove = true;
     private bool isGrounded = true;
     private bool isOnWall = false;
     private bool isResisting = false;
@@ -86,7 +107,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("Components")]
     private SpriteRenderer sr;
     private Rigidbody2D rb;
-    private Collider2D playerCollider;
+    private BoxCollider2D playerCollider;
     private Animator animator;
 
     [Header("Animator Hashing")]
@@ -113,9 +134,20 @@ public class PlayerMovement : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        // flip sprite
         if (rb.linearVelocityX != 0)
         {
             sr.flipX = rb.linearVelocityX < 0;
+        }
+
+        // collider changes
+        if (isSliding)
+        {
+            slideColl.ChangeCollider(playerCollider);
+        }
+        else
+        {
+            normalColl.ChangeCollider(playerCollider);
         }
     }
 
@@ -134,9 +166,15 @@ public class PlayerMovement : MonoBehaviour
             isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX) && Mathf.Abs(rb.linearVelocityX) > acceleration;
 
             // friction
-            if (xForce.x == 0)
+            if (xForce.x == 0 && isGrounded) // isgrounded test ??
             {
                 rb.linearDamping = 2;
+
+                // less friction while sliding
+                if (isSliding)
+                {
+                    rb.linearDamping = 1;
+                }
             }
             else
             {
@@ -158,6 +196,8 @@ public class PlayerMovement : MonoBehaviour
     {
         isGrounded = GroundCheck();
         isOnWall = WallCheck();
+
+        if (!canMove) return;
 
         // --------------------------------------------- //
         // give player coyote time for jumping
@@ -197,6 +237,7 @@ public class PlayerMovement : MonoBehaviour
             if (!wallCoyoteTime.IsReady() || !jumpCoyoteTime.IsReady())
             {
                 rb.linearVelocityY = jumpForce;
+                isSliding = false; // cancel slide
 
                 Debug.Log("coyote time remaining: " + wallCoyoteTime.Remaining() + " | " + "on the ground: " + isGrounded + " | " + "buffer remaining: " + bufferTime.Remaining());
 
@@ -259,6 +300,17 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    [ContextMenu("")]
+    public void EnableMovement()
+    {
+        canMove = true;
+    }
+
+    public void DisableMovement()
+    {
+        canMove = false;
+    }
+
     private bool GroundCheck()
     {
         // cast thin box at the player's feet and verify the hit normal points upwards
@@ -292,10 +344,10 @@ public class PlayerMovement : MonoBehaviour
         xForce = new Vector2(xInput, 0);
 
         // crouching (below a certain threshold so controllers crouch on slight imperfections)
-        if (Vector2.Dot(Vector2.up, ctx.ReadValue<Vector2>().normalized) < -0.5f)
+        if (Vector2.Dot(Vector2.up, ctx.ReadValue<Vector2>()) < -0.5f && isGrounded)
         {
-            // trigger sliding if the player is going fast enough
-            if (rb.linearVelocityX > maxSpeed * 0.7f)
+            // trigger sliding if the player is going fast enough (unlocks under slide lock)
+            if (Math.Abs(rb.linearVelocityX) > 1f && xInput != 0 && canSlide)
             {
                 isSliding = true;
             }
@@ -303,6 +355,8 @@ public class PlayerMovement : MonoBehaviour
             {
                 isCrouching = true;
             }
+
+            xForce = Vector2.zero;
 
             // state debugging
             Debug.Log("slide: " + isSliding + " | " + "crouch: " + isCrouching);
