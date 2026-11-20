@@ -6,6 +6,8 @@ public class healthyCode : MonoBehaviour
     public GameObject player;
 
     public int health = 3;
+
+
     
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -21,6 +23,8 @@ public class healthyCode : MonoBehaviour
         {
             Destroy(this.gameObject);
         }
+
+        
     }
     private void OnTriggerEnter2D(UnityEngine.Collider2D col)
     {
