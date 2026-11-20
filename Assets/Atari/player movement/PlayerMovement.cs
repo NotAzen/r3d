@@ -31,7 +31,7 @@ public struct Cooldown
     private float lastTriggerTime;
 
     // public constructor
-    public Cooldown(float cooldown)
+    public Cooldown(float cooldown = 1f)
     {
         this.cooldown = cooldown;
         lastTriggerTime = -cooldown;
@@ -49,12 +49,19 @@ public struct Cooldown
 
     public bool IsReady()
     {
+        if (lastTriggerTime < cooldown) return true; // UNLESS it's at the very start :sob:
         return Time.fixedTime - lastTriggerTime > cooldown;
     }
 
     public float Remaining()
     {
         return Mathf.Max((cooldown + lastTriggerTime - Time.fixedTime) / cooldown, 0);
+    }
+
+    public void InfoDebug()
+    {
+        Debug.Log(cooldown);
+        Debug.Log(lastTriggerTime);
     }
 }
 
@@ -76,6 +83,7 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("Collider Changes")]
     [SerializeField] private BoxColliderSizes normalColl;
+    [SerializeField] private BoxColliderSizes crouchColl;
     [SerializeField] private BoxColliderSizes slideColl;
 
     [Header("Base Stats")]
@@ -103,6 +111,7 @@ public class PlayerMovement : MonoBehaviour
     private bool hasSecondJump = false;
     private Vector2 xForce;
     private float storedVelocity;
+    private LayerMask ground;
 
     [Header("Components")]
     private SpriteRenderer sr;
@@ -129,6 +138,7 @@ public class PlayerMovement : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         playerCollider = GetComponent<BoxCollider2D>();
         animator = GetComponent<Animator>();
+        ground = LayerMask.GetMask("Ground");
     }
 
     // Update is called once per frame
@@ -144,6 +154,10 @@ public class PlayerMovement : MonoBehaviour
         if (isSliding)
         {
             slideColl.ChangeCollider(playerCollider);
+        }
+        else if (isCrouching)
+        {
+            crouchColl.ChangeCollider(playerCollider);
         }
         else
         {
@@ -239,7 +253,8 @@ public class PlayerMovement : MonoBehaviour
                 rb.linearVelocityY = jumpForce;
                 isSliding = false; // cancel slide
 
-                Debug.Log("coyote time remaining: " + wallCoyoteTime.Remaining() + " | " + "on the ground: " + isGrounded + " | " + "buffer remaining: " + bufferTime.Remaining());
+                wallCoyoteTime.InfoDebug();
+                Debug.Log("coyote time remaining: " + jumpCoyoteTime.Remaining() + " | " + "on the ground: " + isGrounded + " | " + "buffer remaining: " + bufferTime.Remaining());
 
                 // boost off wall
                 if (!wallCoyoteTime.IsReady() && !isGrounded && canWallJump)
@@ -300,12 +315,13 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    [ContextMenu("")]
+    [ContextMenu("Enable Movement")]
     public void EnableMovement()
     {
         canMove = true;
     }
 
+    [ContextMenu("Disable Movement")]
     public void DisableMovement()
     {
         canMove = false;
@@ -317,7 +333,7 @@ public class PlayerMovement : MonoBehaviour
         Vector2 origin = (Vector2)transform.position + playerCollider.offset + playerCollider.bounds.size.y / 2f * Vector2.down;
         Vector2 boxSize = new(playerCollider.bounds.size.x * 0.95f, 0.05f);
 
-        RaycastHit2D hit = Physics2D.BoxCast(origin, boxSize, 0, Vector2.down, 0, LayerMask.GetMask("Ground"));
+        RaycastHit2D hit = Physics2D.BoxCast(origin, boxSize, 0, Vector2.down, 0, ground);
         return hit.collider != null && hit.normal.y > 0.65f;
     }
 
@@ -330,21 +346,19 @@ public class PlayerMovement : MonoBehaviour
         Vector2 origin = (Vector2)transform.position + playerCollider.offset + playerCollider.bounds.size.x / 2f * Vector2.left;
         Vector2 boxSize = new(0.05f, 0.95f * playerCollider.bounds.size.y);
 
-        RaycastHit2D hit = Physics2D.BoxCast(origin, boxSize, 0, Vector2.right, playerCollider.bounds.size.x, LayerMask.GetMask("Ground"));
+        RaycastHit2D hit = Physics2D.BoxCast(origin, boxSize, 0, Vector2.right, playerCollider.bounds.size.x, ground);
         return hit.collider != null && Mathf.Abs(hit.normal.x) > 0.65f;
     }
 
     public void OnMove(InputAction.CallbackContext ctx)
     {
-        // short circuit
-        //if (!ctx.performed) return;
-
-        float xInput = ctx.ReadValue<Vector2>().x;
+        Vector2 input = ctx.ReadValue<Vector2>();
+        float xInput = input.x;
 
         xForce = new Vector2(xInput, 0);
 
         // crouching (below a certain threshold so controllers crouch on slight imperfections)
-        if (Vector2.Dot(Vector2.up, ctx.ReadValue<Vector2>()) < -0.5f && isGrounded)
+        if (Vector2.Dot(Vector2.up, input) < -0.5f && isGrounded)
         {
             // trigger sliding if the player is going fast enough (unlocks under slide lock)
             if (Math.Abs(rb.linearVelocityX) > 1f && xInput != 0 && canSlide)
