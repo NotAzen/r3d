@@ -239,6 +239,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3940c3d9f17ed3f4c9d4bb637e416b23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  normalColl:
+    offset: {x: 0.004, y: 0.1}
+    size: {x: 0.5, y: 1.2}
+  slideColl:
+    offset: {x: 0.06, y: -0.25}
+    size: {x: 1.2, y: 0.5}
   maxSpeed: 10
   acceleration: 8
   jumpForce: 10

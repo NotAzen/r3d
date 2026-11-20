@@ -1,19 +1,40 @@
+using JetBrains.Annotations;
 using System;
-using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+public enum Locks
+{
+    DoubleJump,
+    WallJump,
+    Slide,
+    Dash
+}
+
 [Serializable]
-public class Cooldown
+public struct BoxColliderSizes
+{
+    [SerializeField] private Vector2 offset;
+    [SerializeField] private Vector2 size;
+
+    public void ChangeCollider(BoxCollider2D coll)
+    {
+        coll.offset = offset;
+        coll.size = size;
+    }
+}
+
+[Serializable]
+public struct Cooldown
 {
     [SerializeField] private float cooldown;
     private float lastTriggerTime;
 
     // public constructor
-    public Cooldown()
+    public Cooldown(float cooldown)
     {
-        lastTriggerTime = -100f;
+        this.cooldown = cooldown;
+        lastTriggerTime = -cooldown;
     }
 
     public void Trigger()
@@ -44,10 +65,18 @@ public class Cooldown
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Ability Unlocks")]
-    [HideInInspector] public bool canDoubleJump = false;
-    [HideInInspector] public bool canWallJump = false;
-    [HideInInspector] public bool canSlide = false;
-    [HideInInspector] public bool canDash = false;
+    [HideInInspector]
+    private bool canDoubleJump = false;
+    [HideInInspector]
+    private bool canWallJump = false;
+    [HideInInspector]
+    private bool canSlide = false;
+    [HideInInspector]
+    private bool canDash = false;
+
+    [Header("Collider Changes")]
+    [SerializeField] private BoxColliderSizes normalColl;
+    [SerializeField] private BoxColliderSizes slideColl;
 
     [Header("Base Stats")]
     [SerializeField] private float maxSpeed = 5f;
@@ -64,6 +93,8 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float speedMultiplier = 1f;
 
     [Header("other stats idk")]
+    [HideInInspector]
+    private bool canMove = true;
     private bool isGrounded = true;
     private bool isOnWall = false;
     private bool isResisting = false;
@@ -76,16 +107,18 @@ public class PlayerMovement : MonoBehaviour
     [Header("Components")]
     private SpriteRenderer sr;
     private Rigidbody2D rb;
-    private Collider2D playerCollider;
+    private BoxCollider2D playerCollider;
     private Animator animator;
 
     [Header("Animator Hashing")]
-    private static readonly int IsGroundedHash = Animator.StringToHash("isGrounded");
     private static readonly int xSpeedHash = Animator.StringToHash("xSpeed");
-    private static readonly int xResistingHash = Animator.StringToHash("xResisting");
-    private static readonly int jumpHash = Animator.StringToHash("jump");
     private static readonly int yVelHash = Animator.StringToHash("yVel");
+    private static readonly int jumpHash = Animator.StringToHash("jump");
+    private static readonly int xResistingHash = Animator.StringToHash("xResisting");
+    private static readonly int IsGroundedHash = Animator.StringToHash("isGrounded");
     private static readonly int isCrouchingHash = Animator.StringToHash("isCrouching");
+    private static readonly int isOnWallHash = Animator.StringToHash("isOnWall");
+    private static readonly int isSlidingHash = Animator.StringToHash("isSliding");
 
     // -------------------------------------------------------------------------------------- //
 
@@ -101,9 +134,20 @@ public class PlayerMovement : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        // flip sprite
         if (rb.linearVelocityX != 0)
         {
             sr.flipX = rb.linearVelocityX < 0;
+        }
+
+        // collider changes
+        if (isSliding)
+        {
+            slideColl.ChangeCollider(playerCollider);
+        }
+        else
+        {
+            normalColl.ChangeCollider(playerCollider);
         }
     }
 
@@ -122,9 +166,15 @@ public class PlayerMovement : MonoBehaviour
             isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX) && Mathf.Abs(rb.linearVelocityX) > acceleration;
 
             // friction
-            if (xForce.x == 0)
+            if (xForce.x == 0 && isGrounded) // isgrounded test ??
             {
                 rb.linearDamping = 2;
+
+                // less friction while sliding
+                if (isSliding)
+                {
+                    rb.linearDamping = 1;
+                }
             }
             else
             {
@@ -132,11 +182,14 @@ public class PlayerMovement : MonoBehaviour
             }
         }
 
-        animator.SetBool(IsGroundedHash, isGrounded);
+        // animator stuff
         animator.SetFloat(xSpeedHash, Mathf.Abs(rb.linearVelocityX));
-        animator.SetBool(xResistingHash, isResisting);
         animator.SetFloat(yVelHash, rb.linearVelocityY);
+        animator.SetBool(xResistingHash, isResisting);
+        animator.SetBool(IsGroundedHash, isGrounded);
         animator.SetBool(isCrouchingHash, isCrouching);
+        animator.SetBool(isOnWallHash, isOnWall);
+        animator.SetBool(isSlidingHash, isSliding);
     }
 
     private void FixedUpdate()
@@ -144,11 +197,13 @@ public class PlayerMovement : MonoBehaviour
         isGrounded = GroundCheck();
         isOnWall = WallCheck();
 
+        if (!canMove) return;
+
         // --------------------------------------------- //
         // give player coyote time for jumping
         if (isGrounded)
         {
-            canDoubleJump = true;
+            hasSecondJump = true;
             jumpCoyoteTime.Trigger();
         }
         if (isOnWall)
@@ -182,11 +237,12 @@ public class PlayerMovement : MonoBehaviour
             if (!wallCoyoteTime.IsReady() || !jumpCoyoteTime.IsReady())
             {
                 rb.linearVelocityY = jumpForce;
+                isSliding = false; // cancel slide
 
                 Debug.Log("coyote time remaining: " + wallCoyoteTime.Remaining() + " | " + "on the ground: " + isGrounded + " | " + "buffer remaining: " + bufferTime.Remaining());
 
                 // boost off wall
-                if (!wallCoyoteTime.IsReady() && !isGrounded)
+                if (!wallCoyoteTime.IsReady() && !isGrounded && canWallJump)
                 {
                     Debug.Log("boost");
 
@@ -204,12 +260,12 @@ public class PlayerMovement : MonoBehaviour
                 animator.SetTrigger(jumpHash);
             }
 
-            // in air basically
-            if (canDoubleJump)
+            // in air basically (unlocks under double jump lock)
+            else if (hasSecondJump && canDoubleJump)
             {
                 rb.linearVelocityY = jumpForce;
 
-                canDoubleJump = false;
+                hasSecondJump = false;
 
                 // trigger animator
                 animator.SetTrigger(jumpHash);
@@ -220,21 +276,21 @@ public class PlayerMovement : MonoBehaviour
     // -------------------------------------------------------------------------------------- //
 
     // ability unlock function
-    public void UnlockAbility(string name)
+    public void UnlockAbility(Locks name)
     {
         switch (name)
         {
             // not evil cases
-            case "doublejump":
+            case Locks.DoubleJump:
                 canDoubleJump = true;
                 return;
-            case "walljump":
+            case Locks.WallJump:
                 canWallJump = true;
                 return;
-            case "slide":
+            case Locks.Slide:
                 canSlide = true;
                 return;
-            case "dash":
+            case Locks.Dash:
                 canDash = true;
                 return;
 
@@ -242,6 +298,17 @@ public class PlayerMovement : MonoBehaviour
             default:
                 return;
         }
+    }
+
+    [ContextMenu("")]
+    public void EnableMovement()
+    {
+        canMove = true;
+    }
+
+    public void DisableMovement()
+    {
+        canMove = false;
     }
 
     private bool GroundCheck()
@@ -256,6 +323,9 @@ public class PlayerMovement : MonoBehaviour
 
     private bool WallCheck()
     {
+        // always return false if unable to wall jump
+        if (!canWallJump) return false;
+
         // cast box slightly from player's feet
         Vector2 origin = (Vector2)transform.position + playerCollider.offset + playerCollider.bounds.size.x / 2f * Vector2.left;
         Vector2 boxSize = new(0.05f, 0.95f * playerCollider.bounds.size.y);
@@ -274,10 +344,10 @@ public class PlayerMovement : MonoBehaviour
         xForce = new Vector2(xInput, 0);
 
         // crouching (below a certain threshold so controllers crouch on slight imperfections)
-        if (Vector2.Dot(Vector2.up, ctx.ReadValue<Vector2>().normalized) < -0.5f)
+        if (Vector2.Dot(Vector2.up, ctx.ReadValue<Vector2>()) < -0.5f && isGrounded)
         {
-            // trigger sliding if the player is going fast enough
-            if (rb.linearVelocityX > maxSpeed * 0.7f)
+            // trigger sliding if the player is going fast enough (unlocks under slide lock)
+            if (Math.Abs(rb.linearVelocityX) > 1f && xInput != 0 && canSlide)
             {
                 isSliding = true;
             }
@@ -285,6 +355,11 @@ public class PlayerMovement : MonoBehaviour
             {
                 isCrouching = true;
             }
+
+            xForce = Vector2.zero;
+
+            // state debugging
+            Debug.Log("slide: " + isSliding + " | " + "crouch: " + isCrouching);
         }
         else
         {
