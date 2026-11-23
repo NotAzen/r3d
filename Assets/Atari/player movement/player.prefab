@@ -240,14 +240,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   normalColl:
-    offset: {x: 0.004, y: 0.1}
-    size: {x: 0.5, y: 1.2}
+    _offset: {x: 0.004, y: 0.1}
+    _size: {x: 0.5, y: 1.2}
   crouchColl:
-    offset: {x: 0.004, y: -0.05}
-    size: {x: 0.5, y: 0.9}
+    _offset: {x: 0.004, y: -0.05}
+    _size: {x: 0.5, y: 0.9}
   slideColl:
-    offset: {x: 0.06, y: -0.25}
-    size: {x: 1.2, y: 0.5}
+    _offset: {x: 0.06, y: -0.25}
+    _size: {x: 1.2, y: 0.5}
   maxSpeed: 10
   acceleration: 8
   jumpForce: 10

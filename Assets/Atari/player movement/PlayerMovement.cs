@@ -14,13 +14,15 @@ public enum Locks
 [Serializable]
 public struct BoxColliderSizes
 {
-    [SerializeField] private Vector2 offset;
-    [SerializeField] private Vector2 size;
+    [SerializeField] private Vector2 _offset;
+    public readonly Vector2 offset => _offset;
+    [SerializeField] private Vector2 _size;
+    public readonly Vector2 size => _size;
 
     public void ChangeCollider(BoxCollider2D coll)
     {
-        coll.offset = offset;
-        coll.size = size;
+        coll.offset = _offset;
+        coll.size = _size;
     }
 }
 
@@ -95,6 +97,9 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("In seconds. Time after leaving the jump window you are still able to jump.")][SerializeField] private Cooldown jumpCoyoteTime = new();
     [Tooltip("In seconds. Time after leaving the jump window you are still able to jump.")][SerializeField] private Cooldown wallCoyoteTime = new();
     [Tooltip("In seconds. Time before enter the jump window you are still able to jump.")][SerializeField] private Cooldown bufferTime = new();
+    [SerializeField] private float resistanceFriction = 2;
+    [SerializeField] private float normalFriction = 2;
+    [SerializeField] private float slidingFriction = 1;
 
     [Header("Stat Buffs")]
     [SerializeField] private float airAccelerationMultiplier = 0.8f; 
@@ -106,6 +111,7 @@ public class PlayerMovement : MonoBehaviour
     private bool isGrounded = true;
     private bool isOnWall = false;
     private bool isResisting = false;
+    private bool tryingToUncrouch = false;
     private bool isCrouching = false;
     private bool isSliding = false;
     private bool hasSecondJump = false;
@@ -172,22 +178,36 @@ public class PlayerMovement : MonoBehaviour
         {
             // ...continue resisting until acceleration stops
             isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX);
-            rb.linearDamping = 2;
+            rb.linearDamping = resistanceFriction;
         }
         else
         {
             // ...else consider whether the player was already in motion
             isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX) && Mathf.Abs(rb.linearVelocityX) > acceleration;
 
+            if (isSliding)
+            {
+                isResisting = false; // never resist while sliding
+            }
+
             // friction
             if (xForce.x == 0 && isGrounded) // isgrounded test ??
             {
-                rb.linearDamping = 2;
+                rb.linearDamping = normalFriction;
 
                 // less friction while sliding
                 if (isSliding)
                 {
-                    rb.linearDamping = 1;
+                    // if sliding, reduced friction
+                    if (CanUncrouch())
+                    {
+                        rb.linearDamping = slidingFriction;
+                    }
+                    // if they cannot uncrouch while sliding, remove friction to keep them sliding until they can uncrouch
+                    else
+                    {
+                        rb.linearDamping = 0;
+                    }
                 }
             }
             else
@@ -231,13 +251,27 @@ public class PlayerMovement : MonoBehaviour
         {
             appliedAcceleration *= airAccelerationMultiplier;
         }
+        if (isSliding)
+        {
+            appliedAcceleration = 0; // no you cant change direction while sliding
+        }
 
         rb.AddForce(appliedAcceleration * xForce); // movement acceleration
-        rb.linearVelocityX = Mathf.Clamp(rb.linearVelocityX, -maxSpeed, maxSpeed); // clamp speed  
+        rb.linearVelocityX = Mathf.Clamp(rb.linearVelocityX, -maxSpeed, maxSpeed); // clamp speed
 
-
+        if (isCrouching && !isSliding)
+        {
+            rb.linearVelocityX = 0; // no you can't move while crouching
+        }
 
         // --------------------------------------------- //
+        // when attempting to uncrouch, if they can't, wait for the next available frame
+        if (tryingToUncrouch && CanUncrouch())
+        {
+            isCrouching = false;
+            isSliding = false;
+        }
+        
         // if unable to jump or not on the wall, store velocities
         if (!isOnWall && wallCoyoteTime.IsReady())
         {
@@ -350,6 +384,15 @@ public class PlayerMovement : MonoBehaviour
         return hit.collider != null && Mathf.Abs(hit.normal.x) > 0.65f;
     }
 
+    private bool CanUncrouch()
+    {
+        // cast thin box at the player's feet and verify the hit normal points upwards
+        Vector2 origin = (Vector2)transform.position + normalColl.offset;
+
+        RaycastHit2D hit = Physics2D.BoxCast(origin, normalColl.size, 0, Vector2.down, 0, ground);
+        return hit.collider == null;
+    }
+
     public void OnMove(InputAction.CallbackContext ctx)
     {
         Vector2 input = ctx.ReadValue<Vector2>();
@@ -371,14 +414,50 @@ public class PlayerMovement : MonoBehaviour
             }
 
             xForce = Vector2.zero;
+            tryingToUncrouch = false;
 
             // state debugging
             Debug.Log("slide: " + isSliding + " | " + "crouch: " + isCrouching);
         }
-        else
+        else if (CanUncrouch())
         {
             isCrouching = false;
             isSliding = false;
+        }
+        else
+        {
+            tryingToUncrouch = true;
+        }
+    }
+
+    public void OnCrouch(InputAction.CallbackContext ctx)
+    {
+        if (!canSlide) return; // locked behind slide lock
+
+        // press
+        if (ctx.performed)
+        {
+            // must be moving at a certain speed
+            if (Mathf.Abs(rb.linearVelocityX) > 1f && xForce.x != 0)
+            {
+                isSliding = true;
+            }
+            else
+            {
+                isCrouching = true;
+            }
+
+            xForce = Vector2.zero;
+            tryingToUncrouch = false;
+
+            // state debugging
+            Debug.Log("slide: " + isSliding + " | " + "crouch: " + isCrouching);
+        }
+
+        // release
+        else if (ctx.canceled)
+        {
+
         }
     }
 
@@ -388,6 +467,11 @@ public class PlayerMovement : MonoBehaviour
         if (!ctx.performed) return;
 
         bufferTime.Trigger();
+    }
+
+    public void OnDash(InputAction.CallbackContext ctx)
+    {
+        
     }
 
     private void OnDrawGizmos()
