@@ -57,6 +57,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9128271494660322936, guid: da6fbe4bb9beaed4e8310e848430348b, type: 3}
+      propertyPath: targetObject
+      value: 
+      objectReference: {fileID: 5217795178710153610, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
+    - target: {fileID: 9128271494660322936, guid: da6fbe4bb9beaed4e8310e848430348b, type: 3}
       propertyPath: doesIntervols
       value: 1
       objectReference: {fileID: 0}

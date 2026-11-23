@@ -1,9 +1,11 @@
 using System.Collections;
 using Unity.VisualScripting;
+using UnityEditor.PackageManager;
 using UnityEngine;
 
 public class DangerousTile : MonoBehaviour
 {
+   
     public healthyCode hc;
     private SpriteRenderer sr;
 
@@ -15,10 +17,11 @@ public class DangerousTile : MonoBehaviour
     public Collider2D cr;
 
 
-    private void Start()
+    void Start()
     {
         sr = GetComponent<SpriteRenderer>();
         cr = GetComponent<Collider2D>();
+        hc = FindAnyObjectByType<healthyCode>();
         if (doesIntervols)
         {
             StartCoroutine(Damaging());

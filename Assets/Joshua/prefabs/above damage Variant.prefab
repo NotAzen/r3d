@@ -152,10 +152,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 44f15f0fd766f854fac84438c769b470, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  targetObject: {fileID: 5217795178710153610, guid: 6a61c3842fdad81459f2cae773233d02, type: 3}
   hc: {fileID: 0}
   doesIntervols: 1
-  isActive: 1
   intervolRate: 2
+  delay: 0
+  AT: 0
   cr: {fileID: 5402915526413423599}
 --- !u!1001 &7423941156806007745
 PrefabInstance:
