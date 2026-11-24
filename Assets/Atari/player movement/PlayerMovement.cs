@@ -136,6 +136,7 @@ public class PlayerMovement : MonoBehaviour
     private static readonly int isSlidingHash = Animator.StringToHash("isSliding");
 
     // -------------------------------------------------------------------------------------- //
+    // UNITY REGULAR FUNCTIONS //
 
     // after everything is done loading
     void Awake()
@@ -173,48 +174,7 @@ public class PlayerMovement : MonoBehaviour
 
     private void LateUpdate()
     {
-        // if it's already resisting...
-        if (isResisting)
-        {
-            // ...continue resisting until acceleration stops
-            isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX);
-            rb.linearDamping = resistanceFriction;
-        }
-        else
-        {
-            // ...else consider whether the player was already in motion
-            isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX) && Mathf.Abs(rb.linearVelocityX) > acceleration;
-
-            if (isSliding)
-            {
-                isResisting = false; // never resist while sliding
-            }
-
-            // friction
-            if (xForce.x == 0 && isGrounded) // isgrounded test ??
-            {
-                rb.linearDamping = normalFriction;
-
-                // less friction while sliding
-                if (isSliding)
-                {
-                    // if sliding, reduced friction
-                    if (CanUncrouch())
-                    {
-                        rb.linearDamping = slidingFriction;
-                    }
-                    // if they cannot uncrouch while sliding, remove friction to keep them sliding until they can uncrouch
-                    else
-                    {
-                        rb.linearDamping = 0;
-                    }
-                }
-            }
-            else
-            {
-                rb.linearDamping = 0;
-            }
-        }
+        rb.linearDamping = CalculateAppliedFriction();
 
         // animator stuff
         animator.SetFloat(xSpeedHash, Mathf.Abs(rb.linearVelocityX));
@@ -323,6 +283,42 @@ public class PlayerMovement : MonoBehaviour
     }
 
     // -------------------------------------------------------------------------------------- //
+    // REGULAR FUNCTIONS //
+
+    // friction change function
+    private float CalculateAppliedFriction()
+    {
+        if (isSliding)
+        {
+            // if sliding, reduced friction
+            if (CanUncrouch() && isGrounded)
+            {
+                return slidingFriction;
+            }
+
+            // if they cannot uncrouch while sliding, remove friction to keep them sliding until they can uncrouch
+            return 0;
+        }
+
+        // if it's already resisting...
+        if (isResisting)
+        {
+            // ...continue resisting until acceleration stops
+            isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX);
+            return resistanceFriction;
+        }
+
+        // ...else consider whether the player was already in motion
+        isResisting = Mathf.Abs(rb.linearVelocityX - xForce.x) > Mathf.Abs(rb.linearVelocityX) && Mathf.Abs(rb.linearVelocityX) > acceleration;
+
+        // friction
+        if (xForce.x == 0 && isGrounded) // isgrounded test ??
+        {
+            return normalFriction;
+        }
+        
+        return 0;
+    }
 
     // ability unlock function
     public void UnlockAbility(Locks name)
@@ -361,6 +357,15 @@ public class PlayerMovement : MonoBehaviour
         canMove = false;
     }
 
+    [ContextMenu("Enable Everything")]
+    public void UnlockEverything()
+    {
+        UnlockAbility(Locks.DoubleJump);
+        UnlockAbility(Locks.WallJump);
+        UnlockAbility(Locks.Slide);
+        UnlockAbility(Locks.Dash);
+    }
+
     private bool GroundCheck()
     {
         // cast thin box at the player's feet and verify the hit normal points upwards
@@ -393,41 +398,15 @@ public class PlayerMovement : MonoBehaviour
         return hit.collider == null;
     }
 
+    // -------------------------------------------------------------------------------------- //
+    // UNITY TRIGGER FUNCTIONS //
+
     public void OnMove(InputAction.CallbackContext ctx)
     {
         Vector2 input = ctx.ReadValue<Vector2>();
         float xInput = input.x;
 
         xForce = new Vector2(xInput, 0);
-
-        // crouching (below a certain threshold so controllers crouch on slight imperfections)
-        if (Vector2.Dot(Vector2.up, input) < -0.5f && isGrounded)
-        {
-            // trigger sliding if the player is going fast enough (unlocks under slide lock)
-            if (Math.Abs(rb.linearVelocityX) > 1f && xInput != 0 && canSlide)
-            {
-                isSliding = true;
-            }
-            else
-            {
-                isCrouching = true;
-            }
-
-            xForce = Vector2.zero;
-            tryingToUncrouch = false;
-
-            // state debugging
-            Debug.Log("slide: " + isSliding + " | " + "crouch: " + isCrouching);
-        }
-        else if (CanUncrouch())
-        {
-            isCrouching = false;
-            isSliding = false;
-        }
-        else
-        {
-            tryingToUncrouch = true;
-        }
     }
 
     public void OnCrouch(InputAction.CallbackContext ctx)
@@ -447,7 +426,6 @@ public class PlayerMovement : MonoBehaviour
                 isCrouching = true;
             }
 
-            xForce = Vector2.zero;
             tryingToUncrouch = false;
 
             // state debugging
@@ -457,7 +435,15 @@ public class PlayerMovement : MonoBehaviour
         // release
         else if (ctx.canceled)
         {
-
+            if (CanUncrouch())
+            {
+                isCrouching = false;
+                isSliding = false;
+            }
+            else
+            {
+                tryingToUncrouch = true;
+            }
         }
     }
 
@@ -465,6 +451,9 @@ public class PlayerMovement : MonoBehaviour
     {
         // short circuits
         if (!ctx.performed) return;
+
+        // can't jump underneath objects
+        if (!CanUncrouch()) return;
 
         bufferTime.Trigger();
     }
