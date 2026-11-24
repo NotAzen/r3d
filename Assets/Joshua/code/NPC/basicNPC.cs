@@ -1,3 +1,4 @@
+using NUnit.Framework;
 using UnityEngine;
 
 public class basicNPC : MonoBehaviour
@@ -6,12 +7,13 @@ public class basicNPC : MonoBehaviour
     public CircleCollider2D cc2D;
     public bool istalking;
     
+    
     void Start()
     {
         cc2D = GetComponent<CircleCollider2D>();
     }
 
-    // Update is called once per frame
+
     void Update()
     {
 
@@ -33,6 +35,6 @@ public class basicNPC : MonoBehaviour
     }
     private void OnTriggerExit2D(Collider2D collision)
     {
-        Debug.Log("done talking");
+        Debug.Log("doned talking");
     }
 }
