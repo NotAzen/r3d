@@ -76,6 +76,7 @@ public class basicNPC : MonoBehaviour
         minPatrolDistance = Mathf.Clamp(minPatrolDistance, 1f, 50f);
         maxPatrolDistance = Mathf.Clamp(maxPatrolDistance, minPatrolDistance, 50f);
         patrolDistance = Random.Range(minPatrolDistance, maxPatrolDistance);
+        UpdateSpriteFacing();
         canvas = FindAnyObjectByType<Canvas>();
         canvasRect = canvas.GetComponent<RectTransform>();
         worldCamera = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
@@ -167,6 +168,7 @@ public class basicNPC : MonoBehaviour
         }
 
         body.linearVelocity = new Vector2(patrolDirection * patrolSpeed, body.linearVelocity.y);
+        UpdateSpriteFacing();
     }
 
     private bool HasWallAhead()
@@ -207,9 +209,16 @@ public class basicNPC : MonoBehaviour
         patrolDirection *= -1;
         idleTimeRemaining = idleDuration;
         isIdling = idleDuration > 0f;
+        UpdateSpriteFacing();
+    }
+
+    private void UpdateSpriteFacing()
+    {
         if (spriteRenderer != null)
         {
-            spriteRenderer.flipX = patrolDirection < 0;
+            Vector3 scale = spriteRenderer.transform.localScale;
+            scale.x = Mathf.Sign(patrolDirection) * Mathf.Abs(scale.x);
+            spriteRenderer.transform.localScale = scale;
         }
     }
 
@@ -289,10 +298,7 @@ public class basicNPC : MonoBehaviour
         patrolDirection = direction;
         patrolStartX = body.position.x;
         body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
-        if (spriteRenderer != null)
-        {
-            spriteRenderer.flipX = patrolDirection < 0;
-        }
+        UpdateSpriteFacing();
     }
 
     private TextMeshProUGUI CreateText()
