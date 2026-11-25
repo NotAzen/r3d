@@ -357,7 +357,7 @@ public class PlayerMovement : MonoBehaviour
         canMove = false;
     }
 
-    [ContextMenu("Enable Everything")]
+    [ContextMenu("Unlock Everything")]
     public void UnlockEverything()
     {
         UnlockAbility(Locks.DoubleJump);
@@ -421,7 +421,7 @@ public class PlayerMovement : MonoBehaviour
             {
                 isSliding = true;
             }
-            else
+            else if (isGrounded)
             {
                 isCrouching = true;
             }
