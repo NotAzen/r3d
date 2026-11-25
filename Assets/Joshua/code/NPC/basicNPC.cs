@@ -1,12 +1,22 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
 public class basicNPC : MonoBehaviour
 {
+    private static int nextConversationOrder;
+
     [Header("Text Options")]
     [SerializeField, TextArea] private string[] textOptions =
+    {
+        "Option 1",
+        "Option 2",
+        "Option 3"
+    };
+    [SerializeField, TextArea] private string[] npcTextOptions =
     {
         "Option 1",
         "Option 2",
@@ -28,48 +38,188 @@ public class basicNPC : MonoBehaviour
     [SerializeField] private AudioClip talkSound;
     [SerializeField, Range(0f, 1f)] private float audioVolume = 1f;
 
- [Header("References")]
-    private CircleCollider2D cc2D;
+    [Header("Patrol")]
+    [SerializeField, Min(0f)] private float patrolSpeed = 1f;
+    [SerializeField, Range(1f, 50f)] private float minPatrolDistance = 1f;
+    [SerializeField, Range(1f, 50f)] private float maxPatrolDistance = 50f;
+    [SerializeField, Min(0f)] private float idleDuration = 1f;
+    [SerializeField] private LayerMask groundLayers = 1 << 6;
+    [SerializeField] private Vector2 wallCheckSize = new Vector2(0.2f, 1f);
+    [SerializeField, Min(0f)] private float wallCheckDistance = 0.2f;
+    [SerializeField] private Vector2 groundCheckSize = new Vector2(0.2f, 0.15f);
+    [SerializeField, Min(0f)] private float edgeCheckOffset = 0.3f;
 
-     private Canvas canvas;
+    [Header("References")]
+    private Rigidbody2D body;
+    private SpriteRenderer spriteRenderer;
+    private Canvas canvas;
+    private readonly HashSet<Collider2D> playersInRange = new HashSet<Collider2D>();
+    private readonly HashSet<Collider2D> activeTalkers = new HashSet<Collider2D>();
     private bool isTalking;
+    private bool isNpcConversation;
+    private bool isIdling;
+    private int patrolDirection = 1;
+    private int conversationOrder;
+    private float patrolDistance;
+    private float patrolStartX;
+    private float idleTimeRemaining;
     private Camera worldCamera;
     private RectTransform canvasRect;
     public TMP_FontAsset defaultFont;
     private void Awake()
     {
-        cc2D = GetComponent<CircleCollider2D>();
+        conversationOrder = nextConversationOrder++;
+        body = GetComponent<Rigidbody2D>();
+        body.freezeRotation = true;
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        patrolStartX = body.position.x;
+        minPatrolDistance = Mathf.Clamp(minPatrolDistance, 1f, 50f);
+        maxPatrolDistance = Mathf.Clamp(maxPatrolDistance, minPatrolDistance, 50f);
+        patrolDistance = Random.Range(minPatrolDistance, maxPatrolDistance);
         canvas = FindAnyObjectByType<Canvas>();
         canvasRect = canvas.GetComponent<RectTransform>();
         worldCamera = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
         defaultFont = TMP_Settings.defaultFontAsset;
-        
     }
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        float talkChance = Random.Range(0, 12);
-        isTalking = talkChance > 6;
-
-        if (isTalking)
+        if (collision.CompareTag("Player"))
         {
-            ShowText();
+            if (!playersInRange.Add(collision))
+            {
+                return;
+            }
+
+            if (Random.Range(0, 3) != 0)
+            {
+                return;
+            }
+
+            activeTalkers.Add(collision);
+            isTalking = true;
+            body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
+            ShowText(textOptions);
             Debug.Log("Talking");
         }
-        else
+        else if (collision.CompareTag("NPC"))
         {
-            Debug.Log("Not Talking");
+            basicNPC otherNpc = collision.GetComponentInParent<basicNPC>();
+            if (otherNpc == null || otherNpc == this || !activeTalkers.Add(collision))
+            {
+                return;
+            }
+
+            isTalking = true;
+            if (conversationOrder < otherNpc.conversationOrder
+                && !isNpcConversation && !otherNpc.isNpcConversation)
+            {
+                StartCoroutine(NpcConversation(otherNpc));
+            }
         }
     }
 
     private void OnTriggerExit2D(Collider2D collision)
     {
-        isTalking = false;
+        bool wasTalkingToPlayer = collision.CompareTag("Player") && activeTalkers.Remove(collision);
+        playersInRange.Remove(collision);
+        if (!wasTalkingToPlayer && !activeTalkers.Remove(collision))
+        {
+            return;
+        }
+
+        isTalking = activeTalkers.Count > 0;
+        if (wasTalkingToPlayer)
+        {
+            isIdling = false;
+            idleTimeRemaining = 0f;
+        }
+
         Debug.Log("out of range");
-        
     }
 
-    private void ShowText()
+    private void FixedUpdate()
+    {
+        if (isTalking || isNpcConversation)
+        {
+            body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
+            return;
+        }
+
+        if (isIdling)
+        {
+            body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
+            idleTimeRemaining -= Time.fixedDeltaTime;
+            if (idleTimeRemaining <= 0f)
+            {
+                isIdling = false;
+            }
+
+            return;
+        }
+
+        float targetX = patrolStartX + patrolDirection * patrolDistance;
+        if (HasWallAhead() || !HasGroundAhead()
+            || Mathf.Abs(body.position.x - targetX) <= patrolSpeed * Time.fixedDeltaTime)
+        {
+            ReverseAndIdle();
+            return;
+        }
+
+        body.linearVelocity = new Vector2(patrolDirection * patrolSpeed, body.linearVelocity.y);
+    }
+
+    private bool HasWallAhead()
+    {
+        Vector2 origin = GetCheckOrigin();
+        origin.x += patrolDirection * ((spriteRenderer != null ? spriteRenderer.bounds.extents.x : 0f)
+            + wallCheckDistance);
+        origin.y += spriteRenderer != null ? spriteRenderer.bounds.extents.y : wallCheckSize.y * 0.5f;
+        return Physics2D.BoxCast(
+            origin,
+            wallCheckSize,
+            0f,
+            Vector2.right * patrolDirection,
+            wallCheckDistance,
+            groundLayers);
+    }
+
+    private bool HasGroundAhead()
+    {
+        Vector2 origin = GetCheckOrigin();
+        origin.x += patrolDirection * ((spriteRenderer != null ? spriteRenderer.bounds.extents.x : 0f)
+            + edgeCheckOffset);
+        return Physics2D.OverlapBox(origin, groundCheckSize, 0f, groundLayers) != null;
+    }
+
+    private Vector2 GetCheckOrigin()
+    {
+        if (spriteRenderer != null)
+        {
+            return new Vector2(spriteRenderer.bounds.center.x, spriteRenderer.bounds.min.y);
+        }
+
+        return body.position;
+    }
+
+    private void ReverseAndIdle()
+    {
+        patrolDirection *= -1;
+        idleTimeRemaining = idleDuration;
+        isIdling = idleDuration > 0f;
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.flipX = patrolDirection < 0;
+        }
+    }
+
+    private void ShowText(string[] options)
+    {
+
+        ShowText(options[Random.Range(0, options.Length)]);
+    }
+
+    private void ShowText(string line)
     {
         Vector2 screenPosition = (Vector2)worldCamera.WorldToScreenPoint(transform.position) + textOffset;
         Camera canvasCamera = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : worldCamera;
@@ -86,7 +236,7 @@ public class basicNPC : MonoBehaviour
         text.fontSize = fontSize;
         text.alignment = TextAlignmentOptions.Center;
         text.raycastTarget = false;
-        text.text = textOptions[Random.Range(0, textOptions.Length)];
+        text.text = line;
         text.color = textColor;
         RectTransform textRect = text.rectTransform;
         textRect.anchorMin = Vector2.one * 0.5f;
@@ -96,6 +246,53 @@ public class basicNPC : MonoBehaviour
         textRect.anchoredPosition = canvasPosition;
         StartCoroutine(AnimateText(text));
         PlayTalkAudio();
+    }
+
+    private IEnumerator NpcConversation(basicNPC otherNpc)
+    {
+        isNpcConversation = true;
+        otherNpc.isNpcConversation = true;
+        isTalking = true;
+        otherNpc.isTalking = true;
+
+        int conversationLineCount = Random.Range(3, 13);
+        for (int lineIndex = 0; lineIndex < conversationLineCount; lineIndex++)
+        {
+            basicNPC speaker = lineIndex % 2 == 0 ? this : otherNpc;
+            if (speaker.npcTextOptions != null && speaker.npcTextOptions.Length > 0)
+            {
+                string line = speaker.npcTextOptions[Random.Range(0, speaker.npcTextOptions.Length)];
+                speaker.ShowText(line);
+            }
+            else
+            {
+                Debug.LogWarning("No NPC dialogue options are configured.", speaker);
+            }
+
+            yield return new WaitForSeconds(Mathf.Max(0.01f, speaker.textDuration));
+        }
+
+        bool thisGoesLeft = body.position.x < otherNpc.body.position.x
+            || (Mathf.Approximately(body.position.x, otherNpc.body.position.x)
+                && conversationOrder < otherNpc.conversationOrder);
+        FinishNpcConversation(thisGoesLeft ? -1 : 1);
+        otherNpc.FinishNpcConversation(thisGoesLeft ? 1 : -1);
+    }
+
+    private void FinishNpcConversation(int direction)
+    {
+        isNpcConversation = false;
+        activeTalkers.RemoveWhere(collider => collider != null && collider.CompareTag("NPC"));
+        isTalking = activeTalkers.Count > 0;
+        isIdling = false;
+        idleTimeRemaining = 0f;
+        patrolDirection = direction;
+        patrolStartX = body.position.x;
+        body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.flipX = patrolDirection < 0;
+        }
     }
 
     private TextMeshProUGUI CreateText()

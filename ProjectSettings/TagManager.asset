@@ -6,11 +6,12 @@ TagManager:
   tags:
   - point
   - hazard
+  - NPC
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - Player
   - Water
   - UI
   - Ground
